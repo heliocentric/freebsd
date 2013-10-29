@@ -313,8 +313,7 @@ main(int argc, char *argv[])
 	 * Resolve the mountpoint with realpath(3) and remove unnecessary
 	 * slashes from the devicename if there are any.
 	 */
-	if (checkpath(dir, mntpath) != 0)
-		err(1, "%s", mntpath);
+	(void)checkpath(dir, mntpath);
 	(void)rmslashes(dev, dev);
 
 	if (strcmp(dev, "auto") == 0)
