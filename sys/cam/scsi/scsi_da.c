@@ -3072,7 +3072,7 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 				        "%juMB (%ju %u byte sectors: %dH %dS/T "
                                         "%dC)", (uintmax_t)
 	                                (((uintmax_t)dp->secsize *
-				        dp->sectors) / (1024*1024)),
+				        dp->sectors) / 1000000),
 			                (uintmax_t)dp->sectors,
 				        dp->secsize, dp->heads,
                                         dp->secs_per_track, dp->cylinders);

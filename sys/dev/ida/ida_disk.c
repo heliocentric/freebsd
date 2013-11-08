@@ -197,7 +197,7 @@ idad_attach(device_t dev)
 	 * other initialization
 	 */
 	device_printf(dev, "%uMB (%u sectors), blocksize=%d\n",
-	    drv->secperunit / ((1024 * 1024) / drv->secsize),
+	    (drv->secperunit * drv->secsize) / 1000000,
 	    drv->secperunit, drv->secsize);
 
 	drv->disk = disk_alloc();
