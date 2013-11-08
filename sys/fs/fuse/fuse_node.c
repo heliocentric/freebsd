@@ -347,7 +347,7 @@ fuse_vnode_refreshsize(struct vnode *vp, struct ucred *cred)
 
 int
 fuse_vnode_setsize(struct vnode *vp, struct ucred *cred, off_t newsize)
-{	
+{
 	struct fuse_vnode_data *fvdat = VTOFUD(vp);
 	off_t oldsize;
 	int err = 0;
