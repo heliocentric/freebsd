@@ -217,7 +217,7 @@ mlxd_attach(device_t dev)
     }
 
     device_printf(dev, "%uMB (%u sectors) RAID %d (%s)\n",
-		  sc->mlxd_drive->ms_size / ((1024 * 1024) / MLX_BLKSIZE),
+		  (sc->mlxd_drive->ms_size * MLX_BLKSIZE) / 1000000,
 		  sc->mlxd_drive->ms_size, sc->mlxd_drive->ms_raidlevel, state);
 
     sc->mlxd_disk = disk_alloc();

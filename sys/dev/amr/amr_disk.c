@@ -224,7 +224,7 @@ amrd_attach(device_t dev)
     sc->amrd_dev = dev;
 
     device_printf(dev, "%uMB (%u sectors) RAID %d (%s)\n",
-		  sc->amrd_drive->al_size / ((1024 * 1024) / AMR_BLKSIZE),
+		  (sc->amrd_drive->al_size * AMR_BLKSIZE) / 1000000,
 		  sc->amrd_drive->al_size, sc->amrd_drive->al_properties & AMR_DRV_RAID_MASK, 
 		  amr_describe_code(amr_table_drvstate, AMR_DRV_CURSTATE(sc->amrd_drive->al_state)));
 

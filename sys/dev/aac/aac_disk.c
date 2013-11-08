@@ -390,7 +390,7 @@ aac_disk_attach(device_t dev)
 	sc->ad_cylinders = (sc->ad_size / (sc->ad_heads * sc->ad_sectors));
 
 	device_printf(dev, "%juMB (%ju sectors)\n",
-		      (intmax_t)sc->ad_size / ((1024 * 1024) / AAC_BLOCK_SIZE),
+		      ((intmax_t)sc->ad_size * AAC_BLOCK_SIZE) / 1000000,
 		      (intmax_t)sc->ad_size);
 
 	/* attach a generic disk device to ourselves */
