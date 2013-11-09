@@ -169,6 +169,8 @@ struct dhcp_packet {
 #define	DHO_STREETTALK_SERVER		75
 #define	DHO_STREETTALK_DA_SERVER	76
 #define DHO_DHCP_USER_CLASS_ID		77
+#define DHO_TIMEZONE_PCODE              100
+#define DHO_TIMEZONE_TCODE              101
 #define DHO_CLASSLESS_ROUTES		121
 #define DHO_END				255
 
