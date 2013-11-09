@@ -2465,6 +2465,8 @@ check_option(struct client_lease *l, int option)
 	case DHO_DHCP_CLIENT_IDENTIFIER:
 	case DHO_BOOTFILE_NAME:
 	case DHO_DHCP_USER_CLASS_ID:
+	case DHO_TIMEZONE_PCODE:
+	case DHO_TIMEZONE_TCODE:
 	case DHO_END:
 		return (1);
 	case DHO_CLASSLESS_ROUTES:
