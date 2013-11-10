@@ -101,6 +101,7 @@ SUBDIR=	${_3dfx} \
 	firewire \
 	firmware \
 	fxp \
+	fuse \
 	gem \
 	geom \
 	${_glxiic} \
