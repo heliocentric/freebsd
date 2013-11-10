@@ -108,6 +108,7 @@ SUBDIR=	\
 	${_filemon} \
 	firewire \
 	firmware \
+	fuse \
 	${_fxp} \
 	gem \
 	geom \
