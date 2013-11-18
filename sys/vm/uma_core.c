@@ -1122,7 +1122,9 @@ keg_small_init(uma_keg_t keg)
 	keg->uk_rsize = rsize;
 	keg->uk_ppera = 1;
 
-	if (keg->uk_flags & UMA_ZONE_REFCNT) {
+	if (keg->uk_flags & UMA_ZONE_OFFPAGE) {
+		shsize = 0;
+	} else if (keg->uk_flags & UMA_ZONE_REFCNT) {
 		rsize += UMA_FRITMREF_SZ;	/* linkage & refcnt */
 		shsize = sizeof(struct uma_slab_refcnt);
 	} else {
@@ -1233,7 +1235,7 @@ keg_cachespread_init(uma_keg_t keg)
 	keg->uk_ipers = ((pages * PAGE_SIZE) + trailer) / rsize;
 	keg->uk_flags |= UMA_ZONE_OFFPAGE | UMA_ZONE_VTOSLAB;
 	KASSERT(keg->uk_ipers <= uma_max_ipers,
-	    ("keg_small_init: keg->uk_ipers too high(%d) increase max_ipers",
+	    ("%s: keg->uk_ipers too high(%d) increase max_ipers", __func__,
 	    keg->uk_ipers));
 }
 
@@ -1676,7 +1678,7 @@ uma_startup(void *bootmem, int boot_pages)
 
 #ifdef UMA_DEBUG
 	printf("Calculated uma_max_ipers (for OFFPAGE) is %d\n", uma_max_ipers);
-	printf("Calculated uma_max_ipers_slab (for OFFPAGE) is %d\n",
+	printf("Calculated uma_max_ipers_ref (for OFFPAGE) is %d\n",
 	    uma_max_ipers_ref);
 #endif
 
