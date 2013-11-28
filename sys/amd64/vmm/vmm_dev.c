@@ -47,14 +47,15 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 
 #include <machine/vmparam.h>
-
 #include <machine/vmm.h>
+#include <machine/vmm_dev.h>
+
 #include "vmm_lapic.h"
 #include "vmm_stat.h"
 #include "vmm_mem.h"
 #include "io/ppt.h"
 #include "io/vioapic.h"
-#include <machine/vmm_dev.h>
+#include "io/vhpet.h"
 
 struct vmmdev_softc {
 	struct vm	*vm;		/* vm instance cookie */
@@ -303,6 +304,10 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		ioapic_irq = (struct vm_ioapic_irq *)data;
 		error = vioapic_deassert_irq(sc->vm, ioapic_irq->irq);
 		break;
+	case VM_IOAPIC_PULSE_IRQ:
+		ioapic_irq = (struct vm_ioapic_irq *)data;
+		error = vioapic_pulse_irq(sc->vm, ioapic_irq->irq);
+		break;
 	case VM_MAP_MEMORY:
 		seg = (struct vm_memory_segment *)data;
 		error = vm_malloc(sc->vm, seg->gpa, seg->len);
@@ -362,6 +367,9 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		pmap_get_mapping(vmspace_pmap(vm_get_vmspace(sc->vm)),
 				 gpapte->gpa, gpapte->pte, &gpapte->ptenum);
 		error = 0;
+		break;
+	case VM_GET_HPET_CAPABILITIES:
+		error = vhpet_getcap((struct vm_hpet_cap *)data);
 		break;
 	default:
 		error = ENOTTY;
