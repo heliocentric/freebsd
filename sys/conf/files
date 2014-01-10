@@ -884,8 +884,6 @@ dev/bwi/if_bwi_pci.c		optional bwi pci
 # XXX Work around clang warning, until maintainer approves fix.
 dev/bwn/if_bwn.c		optional bwn siba_bwn \
 	compile-with "${NORMAL_C} ${NO_WSOMETIMES_UNINITIALIZED}"
-dev/bxe/if_bxe.c		optional bxe
-dev/bxe/bxe_link.c		optional bxe
 dev/cardbus/cardbus.c		optional cardbus
 dev/cardbus/cardbus_cis.c	optional cardbus
 dev/cardbus/cardbus_device.c	optional cardbus
@@ -2033,19 +2031,19 @@ dev/usb/net/uhso.c		optional uhso
 dev/usb/wlan/if_rum.c		optional rum
 dev/usb/wlan/if_run.c		optional run
 runfw.c				optional runfw							\
-	compile-with	"${AWK} -f $S/tools/fw_stub.awk runfw:runfw -mrunfw -c${.TARGET}"	\
+	compile-with	"${AWK} -f $S/tools/fw_stub.awk run.fw:runfw -mrunfw -c${.TARGET}"	\
 	no-implicit-rule before-depend local							\
 	clean		"runfw.c"
 runfw.fwo			optional runfw							\
-	dependency	"runfw"									\
+	dependency	"run.fw"								\
 	compile-with	"${NORMAL_FWO}"								\
 	no-implicit-rule									\
 	clean		"runfw.fwo"
-runfw				optional runfw							\
+run.fw				optional runfw							\
 	dependency	"$S/contrib/dev/run/rt2870.fw.uu"					\
 	compile-with	"${NORMAL_FW}"								\
 	no-obj no-implicit-rule									\
-	clean		"runfw"
+	clean		"run.fw"
 dev/usb/wlan/if_uath.c		optional uath
 dev/usb/wlan/if_upgt.c		optional upgt
 dev/usb/wlan/if_ural.c		optional ural
@@ -2751,7 +2749,8 @@ net80211/ieee80211_ageq.c	optional wlan
 net80211/ieee80211_adhoc.c	optional wlan
 net80211/ieee80211_ageq.c	optional wlan
 net80211/ieee80211_amrr.c	optional wlan | wlan_amrr
-net80211/ieee80211_crypto.c	optional wlan
+net80211/ieee80211_crypto.c	optional wlan \
+	compile-with "${NORMAL_C} -Wno-unused-function"
 net80211/ieee80211_crypto_ccmp.c optional wlan wlan_ccmp
 net80211/ieee80211_crypto_none.c optional wlan
 net80211/ieee80211_crypto_tkip.c optional wlan wlan_tkip
@@ -2764,7 +2763,8 @@ net80211/ieee80211_ht.c		optional wlan
 net80211/ieee80211_hwmp.c	optional wlan ieee80211_support_mesh
 net80211/ieee80211_input.c	optional wlan
 net80211/ieee80211_ioctl.c	optional wlan
-net80211/ieee80211_mesh.c	optional wlan ieee80211_support_mesh
+net80211/ieee80211_mesh.c	optional wlan ieee80211_support_mesh \
+	compile-with "${NORMAL_C} -Wno-unused-function"
 net80211/ieee80211_monitor.c	optional wlan
 net80211/ieee80211_node.c	optional wlan
 net80211/ieee80211_output.c	optional wlan
@@ -3078,7 +3078,7 @@ ofed/drivers/infiniband/core/mad.c		optional ofed		\
 	compile-with "${OFED_C} -I$S/ofed/drivers/infiniband/core/"
 ofed/drivers/infiniband/core/cm.c		optional ofed		\
 	no-depend							\
-	compile-with "${OFED_C} -I$S/ofed/drivers/infiniband/core/"
+	compile-with "${OFED_C} -I$S/ofed/drivers/infiniband/core/ -Wno-unused-function"
 ofed/drivers/infiniband/core/cma.c		optional ofed		\
 	no-depend							\
 	compile-with "${OFED_C} -I$S/ofed/drivers/infiniband/core/"
