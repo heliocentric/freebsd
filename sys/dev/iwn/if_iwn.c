@@ -108,6 +108,8 @@ static const struct iwn_ident iwn_ident_table[] = {
 	{ 0x8086, IWN_DID_130_2, "Intel Centrino Wireless-N 130"		},
 	{ 0x8086, IWN_DID_100_1, "Intel Centrino Wireless-N 100"		},
 	{ 0x8086, IWN_DID_100_2, "Intel Centrino Wireless-N 100"		},
+	{ 0x8086, IWN_DID_135_1, "Intel Centrino Wireless-N 135"		},
+	{ 0x8086, IWN_DID_135_2, "Intel Centrino Wireless-N 135"		},
 	{ 0x8086, IWN_DID_4965_1, "Intel Wireless WiFi Link 4965"		},
 	{ 0x8086, IWN_DID_6x00_1, "Intel Centrino Ultimate-N 6300"		},
 	{ 0x8086, IWN_DID_6x00_2, "Intel Centrino Advanced-N 6200"		},
@@ -380,7 +382,7 @@ iwn_probe(device_t dev)
 		if (pci_get_vendor(dev) == ident->vendor &&
 		    pci_get_device(dev) == ident->device) {
 			device_set_desc(dev, ident->name);
-			return 0;
+			return (BUS_PROBE_DEFAULT);
 		}
 	}
 	return ENXIO;
@@ -392,7 +394,6 @@ iwn_attach(device_t dev)
 	struct iwn_softc *sc = (struct iwn_softc *)device_get_softc(dev);
 	struct ieee80211com *ic;
 	struct ifnet *ifp;
-	uint32_t reg;
 	int i, error, rid;
 	uint8_t macaddr[IEEE80211_ADDR_LEN];
 
@@ -421,15 +422,6 @@ iwn_attach(device_t dev)
 
 	/* Clear device-specific "PCI retry timeout" register (41h). */
 	pci_write_config(dev, 0x41, 0, 1);
-
-	/* Hardware bug workaround. */
-	reg = pci_read_config(dev, PCIR_COMMAND, 2);
-	if (reg & PCIM_CMD_INTxDIS) {
-		DPRINTF(sc, IWN_DEBUG_RESET, "%s: PCIe INTx Disable set\n",
-		    __func__);
-		reg &= ~PCIM_CMD_INTxDIS;
-		pci_write_config(dev, PCIR_COMMAND, reg, 2);
-	}
 
 	/* Enable bus-mastering. */
 	pci_enable_busmaster(dev);
@@ -967,6 +959,28 @@ iwn_config_specific(struct iwn_softc *sc, uint16_t pid)
 				sc->limits = &iwn1000_sensitivity_limits;
 				sc->base_params = &iwn1000_base_params;
 				sc->fwname = "iwn100fw";
+				break;
+			default:
+				device_printf(sc->sc_dev, "adapter type id : 0x%04x sub id :"
+				    "0x%04x rev %d not supported (subdevice)\n", pid,
+				    sc->subdevice_id,sc->hw_type);
+				return ENOTSUP;
+		}
+		break;
+
+/* 135 Series */
+/* XXX: This series will need adjustment for rate.
+ * see rx_with_siso_diversity in linux kernel
+ */
+	case IWN_DID_135_1:
+	case IWN_DID_135_2:
+		switch(sc->subdevice_id) {
+			case IWN_SDID_135_1:
+			case IWN_SDID_135_2:
+			case IWN_SDID_135_3:
+				sc->limits = &iwn2030_sensitivity_limits;
+				sc->base_params = &iwn2030_base_params;
+				sc->fwname = "iwn135fw";
 				break;
 			default:
 				device_printf(sc->sc_dev, "adapter type id : 0x%04x sub id :"
@@ -4147,7 +4161,7 @@ iwn_tx_data(struct iwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	}
 
 	/* Encrypt the frame if need be. */
-	if (wh->i_fc[1] & IEEE80211_FC1_WEP) {
+	if (wh->i_fc[1] & IEEE80211_FC1_PROTECTED) {
 		/* Retrieve key for TX. */
 		k = ieee80211_crypto_encap(ni, m);
 		if (k == NULL) {
@@ -5904,7 +5918,7 @@ iwn_check_rx_recovery(struct iwn_softc *sc, struct iwn_stats *rs)
 	 * if ((delta * 100 / msecs) > threshold)
 	 */
 	if (thresh > 0 && (delta_cck + delta_ofdm + delta_ht) * 100 > thresh) {
-		device_printf(sc->sc_dev,
+		DPRINTF(sc, IWN_DEBUG_ANY,
 		    "%s: PLCP error threshold raw (%d) comparison (%d) "
 		    "over limit (%d); retune!\n",
 		    __func__,
@@ -6065,7 +6079,6 @@ iwn_send_advanced_btcoex(struct iwn_softc *sc)
 		error = iwn_cmd(sc, IWN_CMD_BT_COEX, &btconfig,
 		    sizeof(btconfig), 1);
 	}
-
 
 	if (error != 0)
 		return error;
