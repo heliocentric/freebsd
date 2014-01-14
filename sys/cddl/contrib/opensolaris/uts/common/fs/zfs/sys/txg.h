@@ -43,7 +43,7 @@ extern "C" {
 #define	TXG_IDX			(txg & TXG_MASK)
 
 /* Number of txgs worth of frees we defer adding to in-core spacemaps */
-#define	TXG_DEFER_SIZE		2
+#define	TXG_DEFER_SIZE		32
 
 typedef struct tx_cpu tx_cpu_t;
 
