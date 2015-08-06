@@ -148,6 +148,45 @@ strdup(const char *s)
 	return p;
 }
 
+#include "geliimpl.c"
+
+/*
+ * A wrapper for dskread that doesn't have to worry about whether the
+ * buffer pointer crosses a 64k boundary. Reads from an encrypted disk
+ */
+static int
+geli_vdev_read(void *vdev, void *priv, off_t off, void *buf, size_t bytes)
+{
+	char *p;
+	daddr_t lba;
+	unsigned int nb;
+	struct dsk *dsk = (struct dsk *) priv;
+
+	if ((off & (DEV_BSIZE - 1)) || (bytes & (DEV_BSIZE - 1)))
+		return -1;
+
+	p = buf;
+	lba = off / DEV_BSIZE;
+	lba += dsk->start;
+	while (bytes > 0) {
+		nb = bytes / DEV_BSIZE;
+		if (nb > READ_BUF_SIZE / DEV_BSIZE)
+			nb = READ_BUF_SIZE / DEV_BSIZE;
+printf("calling: geli_vdev_read/drvread(dsk, buf, %lu, %d) start=%u\n", lba, nb, dsk->start);
+		if (drvread(dsk, dmadat->rdbuf, lba, nb))
+			return -1;
+		/* decrypt */
+		if (geli_read(dsk, off, dmadat->rdbuf, nb * DEV_BSIZE))
+			return -1;
+		memcpy(p, dmadat->rdbuf, nb * DEV_BSIZE);
+		p += nb * DEV_BSIZE;
+		lba += nb;
+		bytes -= nb * DEV_BSIZE;
+	}
+
+	return 0;
+}
+
 #include "zfsimpl.c"
 
 /*
@@ -358,12 +397,19 @@ probe_drive(struct dsk *dsk)
     unsigned i;
 
     /*
-     * If we find a vdev on the whole disk, stop here. Otherwise dig
+     * If we find a vdev on the whole disk, stop here.
+     * Taste the disk, if it s GELI encrypted, decrypt it and check to see if
+     * it is a usable vdev then. Otherwise dig
      * out the partition table and probe each slice/partition
-     * in turn for a vdev.
+     * in turn for a vdev or GELI encrypted vdev.
      */
     if (vdev_probe(vdev_read, dsk, NULL) == 0)
 	return;
+
+    if (geli_taste(vdev_read, dsk, DEV_BSIZE) == 0) {
+	if (vdev_probe(geli_vdev_read, dsk, NULL) == 0)
+	    return;
+    }
 
     sec = dmadat->secbuf;
     dsk->start = 0;
@@ -387,6 +433,8 @@ probe_drive(struct dsk *dsk)
      * return the spa_t for the first we find (if requested). This
      * will have the effect of booting from the first pool on the
      * disk.
+     *
+     * If no vdev is found, GELI decrypting the device and try again
      */
     entries_per_sec = DEV_BSIZE / hdr.hdr_entsz;
     slba = hdr.hdr_lba_table;
@@ -406,6 +454,17 @@ probe_drive(struct dsk *dsk)
 		     * structure now since the vdev now owns this one.
 		     */
 		    dsk = copy_dsk(dsk);
+		} else if (geli_taste(vdev_read, dsk, ent->ent_lba_end - ent->ent_lba_start) == 0) {
+		    /*
+		     * This slice has GELI, check it for ZFS.
+		     */
+		    if (vdev_probe(geli_vdev_read, dsk, NULL) == 0) {
+			/*
+			 * This slice had a vdev. We need a new dsk
+			 * structure now since the vdev now owns this one.
+			 */
+			dsk = copy_dsk(dsk);
+		    }
 		}
 	    }
 	}
@@ -424,11 +483,18 @@ trymbr:
 	    continue;
 	dsk->start = dp[i].dp_start;
 	if (vdev_probe(vdev_read, dsk, NULL) == 0) {
-	    /*
-	     * This slice had a vdev. We need a new dsk structure now
-	     * since the vdev now owns this one.
-	     */
 	    dsk = copy_dsk(dsk);
+	} else if (geli_taste(vdev_read, dsk, dp[i].dp_size - dp[i].dp_start) == 0) {
+	    /*
+	     * This slice has GELI, check it for ZFS.
+	     */
+	    if (vdev_probe(vdev_read, dsk, NULL) == 0) {
+		/*
+		 * This slice had a vdev. We need a new dsk structure now
+		 * since the vdev now owns this one.
+		 */
+		dsk = copy_dsk(dsk);
+	    }
 	}
     }
 }
@@ -476,6 +542,7 @@ main(void)
 
     autoboot = 1;
 
+    geli_init();
     zfs_init();
 
     /*

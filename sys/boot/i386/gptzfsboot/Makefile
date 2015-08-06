@@ -26,6 +26,7 @@ CFLAGS=	-DBOOTPROG=\"gptzfsboot\" \
 	-I${.CURDIR}/../../common \
 	-I${.CURDIR}/../common \
 	-I${.CURDIR}/../../zfs \
+	-I${.CURDIR}/../../geli \
 	-I${.CURDIR}/../../../cddl/boot/zfs \
 	-I${.CURDIR}/../btx/lib -I. \
 	-I${.CURDIR}/../boot2 \
