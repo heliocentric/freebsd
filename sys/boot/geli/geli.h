@@ -148,11 +148,11 @@ eli_metadata_decode(const u_char *data, struct g_eli_metadata *md)
 		printf("\n");
 	}
 	if (strcmp(md->md_magic, "GEOM::ELI") != 0)
-		return (EINVAL);
+		return (1);
 	md->md_version = le32dec(data + sizeof(md->md_magic));
 	switch (md->md_version) {
 	case G_ELI_VERSION_00:
-		error = EOPNOTSUPP;
+		error = 1;
 		break;
 	case G_ELI_VERSION_01:
 	case G_ELI_VERSION_02:
@@ -164,7 +164,7 @@ eli_metadata_decode(const u_char *data, struct g_eli_metadata *md)
 		error = eli_metadata_decode_v1v2v3v4v5v6v7(data, md);
 		break;
 	default:
-		error = EOPNOTSUPP;
+		error = 1;
 		break;
 	}
 	return (error);
@@ -188,6 +188,7 @@ static void geli_init(void);
 static int geli_taste(int read_func(void *vdev, void *priv, off_t off,
     void *buf, size_t bytes), struct dsk *dsk, daddr_t lastsector);
 static int geli_list(void);
+static int is_geli(struct dsk *dsk);
 static int geli_read(struct dsk *dsk, off_t offset, u_char *buf, size_t bytes);
 static int geli_decrypt(u_int algo, u_char *data, size_t datasize,
     const u_char *key, size_t keysize, const uint8_t* iv);

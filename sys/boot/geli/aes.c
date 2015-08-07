@@ -214,70 +214,9 @@ static void AddRoundKey(uint8_t round)
   }
 }
 
-// The SubBytes Function Substitutes the values in the
-// state matrix with values in an S-box.
-static void SubBytes(void)
-{
-  uint8_t i, j;
-  for(i = 0; i < 4; ++i)
-  {
-    for(j = 0; j < 4; ++j)
-    {
-      (*state)[j][i] = getSBoxValue((*state)[j][i]);
-    }
-  }
-}
-
-// The ShiftRows() function shifts the rows in the state to the left.
-// Each row is shifted with different offset.
-// Offset = Row number. So the first row is not shifted.
-static void ShiftRows(void)
-{
-  uint8_t temp;
-
-  // Rotate first row 1 columns to left  
-  temp           = (*state)[0][1];
-  (*state)[0][1] = (*state)[1][1];
-  (*state)[1][1] = (*state)[2][1];
-  (*state)[2][1] = (*state)[3][1];
-  (*state)[3][1] = temp;
-
-  // Rotate second row 2 columns to left  
-  temp           = (*state)[0][2];
-  (*state)[0][2] = (*state)[2][2];
-  (*state)[2][2] = temp;
-
-  temp       = (*state)[1][2];
-  (*state)[1][2] = (*state)[3][2];
-  (*state)[3][2] = temp;
-
-  // Rotate third row 3 columns to left
-  temp       = (*state)[0][3];
-  (*state)[0][3] = (*state)[3][3];
-  (*state)[3][3] = (*state)[2][3];
-  (*state)[2][3] = (*state)[1][3];
-  (*state)[1][3] = temp;
-}
-
 static uint8_t xtime(uint8_t x)
 {
   return ((x<<1) ^ (((x>>7) & 1) * 0x1b));
-}
-
-// MixColumns function mixes the columns of the state matrix
-static void MixColumns(void)
-{
-  uint8_t i;
-  uint8_t Tmp,Tm,t;
-  for(i = 0; i < 4; ++i)
-  {  
-    t   = (*state)[i][0];
-    Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2] ^ (*state)[i][3] ;
-    Tm  = (*state)[i][0] ^ (*state)[i][1] ; Tm = xtime(Tm);  (*state)[i][0] ^= Tm ^ Tmp ;
-    Tm  = (*state)[i][1] ^ (*state)[i][2] ; Tm = xtime(Tm);  (*state)[i][1] ^= Tm ^ Tmp ;
-    Tm  = (*state)[i][2] ^ (*state)[i][3] ; Tm = xtime(Tm);  (*state)[i][2] ^= Tm ^ Tmp ;
-    Tm  = (*state)[i][3] ^ t ;        Tm = xtime(Tm);  (*state)[i][3] ^= Tm ^ Tmp ;
-  }
 }
 
 #define Multiply(x, y)                                \

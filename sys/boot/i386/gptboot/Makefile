@@ -28,6 +28,7 @@ CFLAGS=	-DBOOTPROG=\"gptboot\" \
 	-DSIOFMT=${B2SIOFMT} \
 	-DSIOSPD=${BOOT_COMCONSOLE_SPEED} \
 	-I${.CURDIR}/../../common \
+	-I${.CURDIR}/../../geli \
 	-I${.CURDIR}/../common \
 	-I${.CURDIR}/../btx/lib -I. \
 	-I${.CURDIR}/../boot2 \
@@ -60,13 +61,13 @@ gptldr.bin: gptldr.out
 gptldr.out: gptldr.o
 	${LD} ${LD_FLAGS} -e start -Ttext ${ORG1} -o ${.TARGET} gptldr.o
 
-CLEANFILES+=	gptboot.bin gptboot.out gptboot.o sio.o gpt.o crc32.o drv.o \
+CLEANFILES+=	gptboot.bin gptboot.out gptboot.o sio.o crc32.o drv.o \
 		cons.o util.o
 
 gptboot.bin: gptboot.out
 	${OBJCOPY} -S -O binary gptboot.out ${.TARGET}
 
-gptboot.out: ${BTXCRT} gptboot.o sio.o gpt.o crc32.o drv.o cons.o util.o
+gptboot.out: ${BTXCRT} gptboot.o sio.o crc32.o drv.o cons.o util.o
 	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBSTAND}
 
 gptboot.o: ${.CURDIR}/../../common/ufsread.c

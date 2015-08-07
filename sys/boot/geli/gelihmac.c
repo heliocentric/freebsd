@@ -26,7 +26,7 @@
 
 __FBSDID("$FreeBSD: head/usr.sbin/fstyp/geli.c 285426 2015-07-12 19:16:19Z allanjude $");
 
-static struct hmac_ctx {
+struct hmac_ctx {
 	SHA512_CTX	shactx;
 	u_char		k_opad[128];
 };
@@ -120,7 +120,7 @@ geli_hmac(const uint8_t *hkey, size_t hkeysize, const uint8_t *data,
  * Verify if the given 'key' is correct.
  * Return 1 if it is correct and 0 otherwise.
  */
-static static int
+static int
 geli_mkey_verify(const unsigned char *mkey, const unsigned char *key)
 {
 	const unsigned char *odhmac;	/* On-disk HMAC. */

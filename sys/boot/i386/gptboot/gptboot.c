@@ -23,6 +23,7 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bootinfo.h>
 #include <machine/elf.h>
+#include <machine/pc/bios.h>
 #include <machine/psl.h>
 
 #include <stdarg.h>
@@ -87,13 +88,45 @@ static char kname[1024];
 static int comspeed = SIOSPD;
 static struct bootinfo bootinfo;
 
+vm_offset_t	high_heap_base;
+uint32_t	bios_basemem, bios_extmem, high_heap_size;
+
+static struct bios_smap smap;
+
+/*
+ * The minimum amount of memory to reserve in bios_extmem for the heap.
+ */
+#define	HEAP_MIN	(3 * 1024 * 1024)
+
+static char *heap_next;
+static char *heap_end;
+
+static int readcnt;
+
 void exit(int);
 static void load(void);
 static int parse(char *, int *);
 static int dskread(void *, daddr_t, unsigned);
-static uint32_t memsize(void);
+static int vdev_read(void *vdev __unused, void *priv, off_t off, void *buf,
+	size_t bytes);
+
+static void *
+malloc(size_t n)
+{
+	char *p = heap_next;
+	if (p + n > heap_end) {
+		printf("malloc failure\n");
+		for (;;)
+		    ;
+		return 0;
+	}
+	heap_next += n;
+	return p;
+}
 
 #include "ufsread.c"
+#include "gpt.c"
+#include "geliimpl.c"
 
 static inline int
 xfsread(ufs_ino_t inode, void *buf, size_t nbyte)
@@ -106,14 +139,90 @@ xfsread(ufs_ino_t inode, void *buf, size_t nbyte)
 	return (0);
 }
 
-static inline uint32_t
-memsize(void)
+static void
+bios_getmem(void)
 {
+    uint64_t size;
 
-	v86.addr = MEM_EXT;
+    /* Parse system memory map */
+    v86.ebx = 0;
+    do {
+	v86.ctl = V86_FLAGS;
+	v86.addr = 0x15;		/* int 0x15 function 0xe820*/
+	v86.eax = 0xe820;
+	v86.ecx = sizeof(struct bios_smap);
+	v86.edx = SMAP_SIG;
+	v86.es = VTOPSEG(&smap);
+	v86.edi = VTOPOFF(&smap);
+	v86int();
+	if ((v86.efl & 1) || (v86.eax != SMAP_SIG))
+	    break;
+	/* look for a low-memory segment that's large enough */
+	if ((smap.type == SMAP_TYPE_MEMORY) && (smap.base == 0) &&
+	    (smap.length >= (512 * 1024)))
+	    bios_basemem = smap.length;
+	/* look for the first segment in 'extended' memory */
+	if ((smap.type == SMAP_TYPE_MEMORY) && (smap.base == 0x100000)) {
+	    bios_extmem = smap.length;
+	}
+
+	/*
+	 * Look for the largest segment in 'extended' memory beyond
+	 * 1MB but below 4GB.
+	 */
+	if ((smap.type == SMAP_TYPE_MEMORY) && (smap.base > 0x100000) &&
+	    (smap.base < 0x100000000ull)) {
+	    size = smap.length;
+
+	    /*
+	     * If this segment crosses the 4GB boundary, truncate it.
+	     */
+	    if (smap.base + size > 0x100000000ull)
+		size = 0x100000000ull - smap.base;
+
+	    if (size > high_heap_size) {
+		high_heap_size = size;
+		high_heap_base = smap.base;
+	    }
+	}
+    } while (v86.ebx != 0);
+
+    /* Fall back to the old compatibility function for base memory */
+    if (bios_basemem == 0) {
+	v86.ctl = 0;
+	v86.addr = 0x12;		/* int 0x12 */
+	v86int();
+
+	bios_basemem = (v86.eax & 0xffff) * 1024;
+    }
+
+    /* Fall back through several compatibility functions for extended memory */
+    if (bios_extmem == 0) {
+	v86.ctl = V86_FLAGS;
+	v86.addr = 0x15;		/* int 0x15 function 0xe801*/
+	v86.eax = 0xe801;
+	v86int();
+	if (!(v86.efl & 1)) {
+	    bios_extmem = ((v86.ecx & 0xffff) + ((v86.edx & 0xffff) * 64)) * 1024;
+	}
+    }
+    if (bios_extmem == 0) {
+	v86.ctl = 0;
+	v86.addr = 0x15;		/* int 0x15 function 0x88*/
 	v86.eax = 0x8800;
 	v86int();
-	return (v86.eax);
+	bios_extmem = (v86.eax & 0xffff) * 1024;
+    }
+
+    /*
+     * If we have extended memory and did not find a suitable heap
+     * region in the SMAP, use the last 3MB of 'extended' memory as a
+     * high heap candidate.
+     */
+    if (bios_extmem >= HEAP_MIN && high_heap_size < HEAP_MIN) {
+	high_heap_size = HEAP_MIN;
+	high_heap_base = bios_extmem + 0x100000 - HEAP_MIN;
+    }
 }
 
 static int
@@ -141,6 +250,17 @@ main(void)
 	ufs_ino_t ino;
 
 	dmadat = (void *)(roundup2(__base + (int32_t)&_end, 0x10000) - __base);
+
+	bios_getmem();
+
+	if (high_heap_size > 0) {
+		heap_end = PTOV(high_heap_base + high_heap_size);
+		heap_next = PTOV(high_heap_base);
+	} else {
+		heap_next = (char *) dmadat + sizeof(*dmadat);
+		heap_end = (char *) PTOV(bios_basemem);
+	}
+
 	v86.ctl = V86_FLAGS;
 	v86.efl = PSL_RESERVED_DEFAULT | PSL_I;
 	dsk.drive = *(uint8_t *)PTOV(ARGS);
@@ -150,14 +270,19 @@ main(void)
 	dsk.start = 0;
 	bootinfo.bi_version = BOOTINFO_VERSION;
 	bootinfo.bi_size = sizeof(bootinfo);
-	bootinfo.bi_basemem = 0;	/* XXX will be filled by loader or kernel */
-	bootinfo.bi_extmem = memsize();
+	bootinfo.bi_basemem = bios_basemem / 1024;
+	bootinfo.bi_extmem = bios_extmem / 1024;
 	bootinfo.bi_memsizes_valid++;
+	bootinfo.bi_bios_dev = dsk.drive;
 
+	geli_init();
 	/* Process configuration file */
 
 	if (gptinit() != 0)
 		return (-1);
+
+	geli_taste(vdev_read, &dsk, (gpttable[curent].ent_lba_end -
+			     gpttable[curent].ent_lba_start));
 
 	autoboot = 1;
 	*cmd = '\0';
@@ -434,6 +559,50 @@ parse(char *cmdstr, int *dskupdated)
 static int
 dskread(void *buf, daddr_t lba, unsigned nblk)
 {
+	int err;
 
-	return drvread(&dsk, buf, lba + dsk.start, nblk);
+	err = drvread(&dsk, buf, lba + dsk.start, nblk);
+	readcnt++;
+
+	if (err == 0 && is_geli(&dsk) == 0) {
+printf("Decrypting(%d): lba (%llu) + dsk->start (%llu) = %llu (%llu)\n", readcnt, err, lba, dsk.start, lba * DEV_BSIZE, (lba + dsk.start) * DEV_BSIZE);
+		err = geli_read(&dsk, lba * DEV_BSIZE, buf, nblk * DEV_BSIZE);
+	}
+	
+	return err;
+}
+
+/*
+ * Read function compartible with the ZFS callback, required to keep the GELI
+ * Implementation the same for both UFS and ZFS
+ */
+static int
+vdev_read(void *vdev __unused, void *priv, off_t off, void *buf, size_t bytes)
+{
+	char *p;
+	daddr_t lba;
+	unsigned int nb;
+	struct dsk *dskp = (struct dsk *) priv;
+
+	if ((off & (DEV_BSIZE - 1)) || (bytes & (DEV_BSIZE - 1)))
+		return -1;
+
+	p = buf;
+	lba = off / DEV_BSIZE;
+	lba += dskp->start;
+
+printf("vdev_read: lba (%llu) + dsk->start (%llu) = %llu\n", lba - dskp->start, dskp->start, lba * DEV_BSIZE);
+	while (bytes > 0) {
+		nb = bytes / DEV_BSIZE;
+		if (nb > VBLKSIZE / DEV_BSIZE)
+			nb = VBLKSIZE / DEV_BSIZE;
+		if (drvread(dskp, dmadat->blkbuf, lba, nb))
+			return -1;
+		memcpy(p, dmadat->blkbuf, nb * DEV_BSIZE);
+		p += nb * DEV_BSIZE;
+		lba += nb;
+		bytes -= nb * DEV_BSIZE;
+	}
+
+	return 0;
 }

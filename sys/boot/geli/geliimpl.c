@@ -46,7 +46,7 @@ geli_init(void)
  */
 static int
 geli_taste(int read_func(void *vdev, void *priv, off_t off, void *buf,
-    size_t bytes), struct dsk *dsk, daddr_t lastsector)
+    size_t bytes), struct dsk *dskp, daddr_t lastsector)
 {
 	struct g_eli_metadata md;
 	u_char passphrase[256];
@@ -57,8 +57,8 @@ geli_taste(int read_func(void *vdev, void *priv, off_t off, void *buf,
 	int error;
 
 	strcpy(passphrase, "test");
-
-	error = read_func(NULL, dsk, (lastsector) * DEV_BSIZE, &buf, DEV_BSIZE);
+printf("ALLAN: got call to geli_taste: %llu\n", lastsector);
+	error = read_func(NULL, dskp, (lastsector) * DEV_BSIZE, &buf, DEV_BSIZE);
 	if (error) {
 printf("ALLAN: error in read_func\n");
 		return (1);
@@ -80,7 +80,7 @@ printf("ALLAN: skipping swap device\n");
 printf("ALLAN: Disk is a GELI boot device\n");
 		}
 		geli_e = malloc(sizeof(struct geli_entry));
-		geli_e->dsk = dsk;
+		geli_e->dsk = dskp;
 		geli_e->md = md;
 
 		geli_hmac_init(&ctx, NULL, 0);
@@ -134,7 +134,7 @@ printf("ALLAN: Failed to decrypt mkey: %d\n", error);
 
 		SLIST_INSERT_HEAD(&geli_head, geli_e, entries);
 		geli_count++;
-
+printf("FOUND GELI!!!\n");
 		return (0);
 	}
 
@@ -156,13 +156,34 @@ geli_list(void)
 }
 
 static int
-geli_read(struct dsk *dsk, off_t offset, u_char *buf, size_t bytes)
+is_geli(struct dsk *dskp)
+{
+	SLIST_FOREACH_SAFE(geli_e, &geli_head, entries, geli_e_tmp) {
+		if (geli_e->dsk->drive != dskp->drive) {
+			continue;
+		}
+		if (geli_e->dsk->part != dskp->part) {
+			/* Right disk, wrong partition */
+			continue;
+		}
+		return (0);
+	}
+	
+	return (1);
+}
+
+static int
+geli_read(struct dsk *dskp, off_t offset, u_char *buf, size_t bytes)
 {
 	u_char iv[G_ELI_IVKEYLEN], key[G_ELI_DATAKEYLEN];
 	int error;
 
 	SLIST_FOREACH_SAFE(geli_e, &geli_head, entries, geli_e_tmp) {
-		if (geli_e->dsk->drive != dsk->drive) {
+		if (geli_e->dsk->drive != dskp->drive) {
+			continue;
+		}
+		if (geli_e->dsk->part != dskp->part) {
+			/* Right disk, wrong partition */
 			continue;
 		}
 
@@ -247,12 +268,6 @@ geli_key(struct geli_entry *gep, off_t offset, uint8_t *key)
 	} else {
 		ekey = gep->ekey;
 	}
-/*
- * covered above anyway
-	if ((gep->md.md_flags & G_ELI_FLAG_SINGLE_KEY) != 0) {
-		ekey = gep->ekey;
-	}
-*/
 
 	keyno = (offset >> G_ELI_KEY_SHIFT) / DEV_BSIZE;
 	bcopy("ekey", hmacdata.magic, 4);
