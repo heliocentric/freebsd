@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2015 Allan Jude <allanjude@FreeBSD.org>
+ * Copyright (c) 2005-2011 Pawel Jakub Dawidek <pawel@dawidek.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +32,7 @@ __FBSDID("$FreeBSD: head/usr.sbin/fstyp/geli.c 285426 2015-07-12 19:16:19Z allan
 
 #include "geli_hmac.c"
 #include "geli_aes.c"
-/*#include "geli_opencrypto.c"*/
+#include "geli_opencrypto.c"
 
 
 static void
