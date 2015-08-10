@@ -29,15 +29,17 @@ __FBSDID("$FreeBSD: head/usr.sbin/fstyp/geli.c 285426 2015-07-12 19:16:19Z allan
 
 #include "geli.h"
 
-#include "gelihmac.c"
-#include "aes.c"
+#include "geli_hmac.c"
+#include "geli_aes.c"
+/*#include "geli_opencrypto.c"*/
+
 
 static void
 geli_init(void)
 {
 
 	geli_count = 0;
-	SLIST_INIT(&geli_head);
+	//SLIST_INIT(&geli_head);
 }
 
 /*
@@ -57,27 +59,22 @@ geli_taste(int read_func(void *vdev, void *priv, off_t off, void *buf,
 	int error;
 
 	strcpy(passphrase, "test");
-printf("ALLAN: got call to geli_taste: %llu\n", lastsector);
 	error = read_func(NULL, dskp, (lastsector) * DEV_BSIZE, &buf, DEV_BSIZE);
 	if (error) {
-printf("ALLAN: error in read_func\n");
 		return (1);
 	}
 	error = eli_metadata_decode(buf, &md);
 	if (error) {
-printf("ALLAN: error in eli_metadata_decode\n");
 		return (1);
 	}
 
 	if (strcmp(md.md_magic, "GEOM::ELI") == 0) {
 		if ((md.md_flags & G_ELI_FLAG_ONETIME)) {
 			/* Swap device, skip it */
-printf("ALLAN: skipping swap device\n");
 			return (1);
 		}
 		if ((md.md_flags & G_ELI_FLAG_BOOT)) {
 			/* Disk is a GELI boot device */
-printf("ALLAN: Disk is a GELI boot device\n");
 		}
 		geli_e = malloc(sizeof(struct geli_entry));
 		geli_e->dsk = dskp;
@@ -88,13 +85,11 @@ printf("ALLAN: Disk is a GELI boot device\n");
 		 * Prepare Derived-Key from the user passphrase.
 		 */
 		if (geli_e->md.md_iterations == 0) {
-printf("Deriving hmac Key\n", geli_e->md.md_iterations);
 			geli_hmac_update(&ctx, geli_e->md.md_salt,
 			    sizeof(geli_e->md.md_salt));
 			geli_hmac_update(&ctx, passphrase, strlen(passphrase));
 			bzero(passphrase, sizeof(passphrase));
 		} else if (geli_e->md.md_iterations > 0) {
-printf("Deriving pkcs5 Key: %u iterations\n", geli_e->md.md_iterations);
 			u_char dkey[G_ELI_USERKEYLEN];
 
 			pkcs5v2_genkey(dkey, sizeof(dkey), geli_e->md.md_salt,
@@ -109,7 +104,7 @@ printf("Deriving pkcs5 Key: %u iterations\n", geli_e->md.md_iterations);
 		error = geli_mkey_decrypt(geli_e, key, mkey, &keynum);
 
 		if (error) {
-printf("ALLAN: Failed to decrypt mkey: %d\n", error);
+			printf("Failed to decrypt GELI master key: %d\n", error);
 			return (1);
 		}
 
@@ -134,25 +129,10 @@ printf("ALLAN: Failed to decrypt mkey: %d\n", error);
 
 		SLIST_INSERT_HEAD(&geli_head, geli_e, entries);
 		geli_count++;
-printf("FOUND GELI!!!\n");
 		return (0);
 	}
 
 	return (1);
-}
-
-static int
-geli_list(void)
-{
-	int count;
-
-	count = 0;
-	SLIST_FOREACH_SAFE(geli_e, &geli_head, entries, geli_e_tmp) {
-		printf("GELI Disk[%d]: %u\n", count, geli_e->dsk->drive);
-		count++;
-	}
-
-	return (0);
 }
 
 static int
@@ -193,17 +173,16 @@ geli_read(struct dsk *dskp, off_t offset, u_char *buf, size_t bytes)
 		geli_key(geli_e, offset, key);
 
 		error = geli_decrypt(geli_e->md.md_ealgo, buf,
-		    bytes, key, geli_e->md.md_keylen / 8, iv);
+		    bytes, key, geli_e->md.md_keylen, iv);
 
 		bzero(key, sizeof(key));
 		if (error != 0) {
-printf("Error decrypting read\n");
 			return (1);
 		}
 		return (0);
 	}
 
-printf("GELI provider not found\n");
+	printf("GELI provider not found\n");
 	return (1);
 }
 
@@ -212,9 +191,29 @@ geli_decrypt(u_int algo, u_char *data, size_t datasize,
     const u_char *key, size_t keysize, const uint8_t* iv)
 {
 	u_char output[datasize];
+	keyInstance aeskey;
+	int err, blks;
 
-	AES128_CBC_decrypt_buffer(&output, data, datasize, key, iv);
-	bcopy(output, data, datasize);
+	switch (algo) {
+		case CRYPTO_AES_CBC:
+			err = rijndael_makeKey(&aeskey, DIR_DECRYPT, keysize, key);
+			if (err) {
+				printf("Failed to setup decryption keys\n");
+				return(1);
+			}
+			blks = rijndael_blockDecrypt(&aeskey, iv, data, datasize * 8, data);
+			if (datasize != (blks / 8)) {
+				printf("Failed to decrypt the entire input\n");
+				return(1);
+			}
+			break;
+
+		case CRYPTO_AES_XTS:
+			break;
+		default:
+			printf("Unsupported crypto algorithm #%d\n", algo);
+			return (1);
+	}
 
 	return (0);
 }

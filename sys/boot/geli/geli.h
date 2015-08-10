@@ -34,7 +34,7 @@ __FBSDID("$FreeBSD: head/usr.sbin/fstyp/geli.c 285426 2015-07-12 19:16:19Z allan
 /* Pull in the sha256 and sha512 implementation */
 #include "shacompat.c"
 
-#define CRYPTO_AES_CBC          11 /* 128 bit blocksize */
+#define CRYPTO_AES_CBC          11
 #define CRYPTO_SHA2_512_HMAC    20
 #define CRYPTO_AES_XTS          22
 
@@ -180,14 +180,13 @@ static struct geli_entry {
 	uint8_t			ivkey[G_ELI_IVKEYLEN];
 	SHA256_CTX		ivctx;
 	SLIST_ENTRY(geli_entry)	entries;
-} *geli_e, *geli_e_tmp;
+} *geli_e, *geli_e_tmp, gent;
 
 static int geli_count;
 
 static void geli_init(void);
 static int geli_taste(int read_func(void *vdev, void *priv, off_t off,
     void *buf, size_t bytes), struct dsk *dsk, daddr_t lastsector);
-static int geli_list(void);
 static int is_geli(struct dsk *dsk);
 static int geli_read(struct dsk *dsk, off_t offset, u_char *buf, size_t bytes);
 static int geli_decrypt(u_int algo, u_char *data, size_t datasize,

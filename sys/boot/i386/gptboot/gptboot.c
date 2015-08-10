@@ -101,12 +101,11 @@ static struct bios_smap smap;
 static char *heap_next;
 static char *heap_end;
 
-static int readcnt;
-
 void exit(int);
 static void load(void);
 static int parse(char *, int *);
 static int dskread(void *, daddr_t, unsigned);
+static uint32_t memsize(void);
 static int vdev_read(void *vdev __unused, void *priv, off_t off, void *buf,
 	size_t bytes);
 
@@ -148,7 +147,7 @@ bios_getmem(void)
     v86.ebx = 0;
     do {
 	v86.ctl = V86_FLAGS;
-	v86.addr = 0x15;		/* int 0x15 function 0xe820*/
+	v86.addr = MEM_EXT;		/* int 0x15 function 0xe820*/
 	v86.eax = 0xe820;
 	v86.ecx = sizeof(struct bios_smap);
 	v86.edx = SMAP_SIG;
@@ -237,6 +236,9 @@ gptinit(void)
 		printf("%s: no UFS partition was found\n", BOOTPROG);
 		return (-1);
 	}
+	geli_taste(vdev_read, &dsk, (gpttable[curent].ent_lba_end -
+			     gpttable[curent].ent_lba_start));
+
 	dsk_meta = 0;
 	return (0);
 }
@@ -281,9 +283,6 @@ main(void)
 	if (gptinit() != 0)
 		return (-1);
 
-	geli_taste(vdev_read, &dsk, (gpttable[curent].ent_lba_end -
-			     gpttable[curent].ent_lba_start));
-
 	autoboot = 1;
 	*cmd = '\0';
 
@@ -317,8 +316,9 @@ main(void)
 		 * keypress, or in case of failure, try to load a kernel
 		 * directly instead.
 		 */
-		if (*kname != '\0')
+		if (*kname != '\0') {
 			load();
+		}
 		memcpy(kname, PATH_BOOT3, sizeof(PATH_BOOT3));
 		load();
 		memcpy(kname, PATH_KERNEL, sizeof(PATH_KERNEL));
@@ -559,16 +559,19 @@ parse(char *cmdstr, int *dskupdated)
 static int
 dskread(void *buf, daddr_t lba, unsigned nblk)
 {
-	int err;
+	int err, n;
 
 	err = drvread(&dsk, buf, lba + dsk.start, nblk);
-	readcnt++;
 
 	if (err == 0 && is_geli(&dsk) == 0) {
-printf("Decrypting(%d): lba (%llu) + dsk->start (%llu) = %llu (%llu)\n", readcnt, err, lba, dsk.start, lba * DEV_BSIZE, (lba + dsk.start) * DEV_BSIZE);
-		err = geli_read(&dsk, lba * DEV_BSIZE, buf, nblk * DEV_BSIZE);
+		/* Decrypt 1 block at a time */
+		for (n = 0; n < nblk; n++) {
+			err = geli_read(&dsk, (lba + n) * DEV_BSIZE, buf + (n * DEV_BSIZE), DEV_BSIZE);
+			if (err)
+				return err;
+		}
 	}
-	
+
 	return err;
 }
 
@@ -591,7 +594,6 @@ vdev_read(void *vdev __unused, void *priv, off_t off, void *buf, size_t bytes)
 	lba = off / DEV_BSIZE;
 	lba += dskp->start;
 
-printf("vdev_read: lba (%llu) + dsk->start (%llu) = %llu\n", lba - dskp->start, dskp->start, lba * DEV_BSIZE);
 	while (bytes > 0) {
 		nb = bytes / DEV_BSIZE;
 		if (nb > VBLKSIZE / DEV_BSIZE)
