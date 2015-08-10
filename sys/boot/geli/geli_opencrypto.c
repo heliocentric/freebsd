@@ -125,6 +125,16 @@ aes_xts_decrypt(caddr_t key, u_int8_t *data)
 	aes_xts_crypt((struct aes_xts_ctx *)key, data, 0);
 }
 
+static void
+aes_xts_decrypt_block(caddr_t key, u_int8_t *data, int datasize)
+{
+	int i;
+
+	for (i = 0; i < datasize; i += AES_XTS_BLOCKSIZE) {
+		aes_xts_crypt((struct aes_xts_ctx *)key, data + i, 0);
+	}
+}
+
 static int
 aes_xts_setkey(u_int8_t **sched, u_int8_t *key, int len)
 {

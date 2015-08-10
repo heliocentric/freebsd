@@ -29,18 +29,21 @@
 __FBSDID("$FreeBSD: head/usr.sbin/fstyp/geli.c 285426 2015-07-12 19:16:19Z allanjude $");
 
 #include "geli.h"
+#include "geli_aes.h"
 
 #include "geli_hmac.c"
 #include "geli_aes.c"
-#include "geli_opencrypto.c"
 
+#ifdef ENABLE_AESXTS
+#include "geli_opencrypto.c"
+#endif
 
 static void
 geli_init(void)
 {
 
 	geli_count = 0;
-	//SLIST_INIT(&geli_head);
+	SLIST_INIT(&geli_head);
 }
 
 /*
@@ -191,8 +194,10 @@ static int
 geli_decrypt(u_int algo, u_char *data, size_t datasize,
     const u_char *key, size_t keysize, const uint8_t* iv)
 {
-	u_char output[datasize];
 	keyInstance aeskey;
+#ifdef ENABLE_AESXTS
+	struct aes_xts_ctx aesctx;
+#endif
 	int err, blks;
 
 	switch (algo) {
@@ -200,17 +205,25 @@ geli_decrypt(u_int algo, u_char *data, size_t datasize,
 			err = rijndael_makeKey(&aeskey, DIR_DECRYPT, keysize, key);
 			if (err) {
 				printf("Failed to setup decryption keys\n");
-				return(1);
+				return (err);
 			}
 			blks = rijndael_blockDecrypt(&aeskey, iv, data, datasize * 8, data);
 			if (datasize != (blks / 8)) {
 				printf("Failed to decrypt the entire input\n");
-				return(1);
+				return (1);
 			}
 			break;
-
 		case CRYPTO_AES_XTS:
+#ifdef ENABLE_AESXTS
+			err = aes_xts_setkey(&aesctx, key, keysize / 8);
+			if (err) {
+				printf("Failed to setup decryption keys\n");
+				return (err);
+			}
+			aes_xts_reinit(&aesctx, iv);
+			aes_xts_decrypt_block(&aesctx, data, datasize);
 			break;
+#endif
 		default:
 			printf("Unsupported crypto algorithm #%d\n", algo);
 			return (1);
