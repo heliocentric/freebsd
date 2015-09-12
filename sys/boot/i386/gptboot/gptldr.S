@@ -85,12 +85,15 @@ start:		xor %cx,%cx			# Zero
 
 # DS is now set to the offset of gptboot.c
 
-		add $(64 * 1024 - 16),%si
-		mov $MEM_USR/16,%ax		# Point %es:%di at end of
-		mov $(64 * 1024 - 16),%di	#  largest boot2 range
-
-
+# Set segment offset.
+		mov $MEM_USR/16,%ax
 		mov %ax,%es
+		mov 0x0, %si
+# Grab data 64k at a time.
+		mov 0xFFFF, %si
+		mov 0xFFFF, %di	#  
+
+
 
 		std
 
@@ -106,9 +109,9 @@ start:		xor %cx,%cx			# Zero
 		add 0xFFF, %ax
 		mov %ax, %ds
 
-		add $(64 * 1024 - 16),%si
+		add $(64 * 1024 - 1),%si
 		mov $(MEM_USR/16 + 0x0FFF),%ax		# Point %es:%di at end of
-		mov $(64 * 1024 - 16),%di	#  largest boot2 range
+		mov $(64 * 1024 - 1),%di	#  largest boot2 range
 
 
 		mov %ax,%es
