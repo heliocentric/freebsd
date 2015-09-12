@@ -71,8 +71,8 @@ start:		xor %cx,%cx			# Zero
  * boot2 is, but we assume it can't be longer than 64k, so we just always
  * copy 64k.
  */
-		mov $0x0, %dx
-		test $0x1 %dx
+		mov $0x0, %al
+		testb $0x2, %al
 		jnz new_code
 old_code:
 		mov $end,%bx			# BTX
@@ -180,20 +180,22 @@ seg_copy:
 		pop %es # Destination segment
 		pop %bx # Segment offset.
 		pop %cx # amount of bytes.
-		pop %dx # direction, 0 for forward, 1 for backward.
-		test $0x1 %dx
-		jnz seg_copy.2
-seg_copy_backwards:
-		mov %bx, %ax
-		
-		std
+		pop %ax # direction, 0 for forward, 1 for backward.
+		testb $0x1, %al
+		jnz seg_copy_backwards
 
 seg_copy_forward:
 		mov %bx, %si
 		mov %bx, %di
 		cld
-		jmp seg_copy.3
-seg_copy.3:
+		jmp seg_copy_real_copy
+
+seg_copy_backwards:
+		mov %bx, %ax		
+		std
+		jmp seg_copy_real_copy
+
+seg_copy_real_copy:
 		mov %si, %di
 		rep movsb
 		ret
