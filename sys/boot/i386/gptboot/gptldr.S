@@ -71,23 +71,61 @@ start:		xor %cx,%cx			# Zero
  * boot2 is, but we assume it can't be longer than 64k, so we just always
  * copy 64k.
  */
+
+
 		mov $end,%bx			# BTX
+# This is being pulled out of the btxld header, which is a uint16t (usr.sbin/btxld/btx.h) btx_hdr
 		mov 0xa(%bx),%si		# Get BTX length and set
 		add %bx,%si			#  %si to start of boot2
+
 		mov %si,%ax			# Align %ds:%si on a
 		shr $4,%ax			#  paragraph boundary
 		and $0xf,%si			#  with the smallest
 		mov %ax,%ds			#  possible %si
+
+# DS is now set to the offset of gptboot.c
+
 		add $(64 * 1024 - 16),%si
 		mov $MEM_USR/16,%ax		# Point %es:%di at end of
 		mov $(64 * 1024 - 16),%di	#  largest boot2 range
+
+
 		mov %ax,%es
+
 		std
+
 		mov %di,%cx			# Copy 64k - paragraph + 1 
 		inc %cx				#  bytes
+
+
 		rep movsb
+
+# lets pretend this is sane.
+# Bump up the segment offset and copy again.
+		mov %ds, %ax
+		add 0xFFF, %ax
+		mov %ax, %ds
+
+		add $(64 * 1024 - 16),%si
+		mov $(MEM_USR/16 + 0x0FFF),%ax		# Point %es:%di at end of
+		mov $(64 * 1024 - 16),%di	#  largest boot2 range
+
+
+		mov %ax,%es
+
+		std
+
+		mov %di,%cx			# Copy 64k - paragraph + 1 
+		inc %cx				#  bytes
+
+		rep movsb
+
+/*
+ * Load btx
+ */
 		mov %cx,%ds			# Reset %ds and %es
 		mov %cx,%es
+
 		mov 0xa(%bx),%cx		# Get BTX length and set
 		mov %bx,%si			#  %si to end of BTX
 		mov $MEM_BTX,%di		# %di -> end of BTX at
