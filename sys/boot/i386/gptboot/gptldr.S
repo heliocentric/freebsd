@@ -72,6 +72,8 @@ start:		xor %cx,%cx			# Zero
  * copy 64k.
  */
 
+# This codes purpose is to handle the packing of btxld, where the btx kernel may
+# bump up against the btx client and not on a paragraph boundary.
 
 		mov $end,%bx			# BTX
 # This is being pulled out of the btxld header, which is a uint16t (usr.sbin/btxld/btx.h) btx_hdr
@@ -81,48 +83,18 @@ start:		xor %cx,%cx			# Zero
 		mov %si,%ax			# Align %ds:%si on a
 		shr $4,%ax			#  paragraph boundary
 		and $0xf,%si			#  with the smallest
-		mov %ax,%ds			#  possible %si
 
-# DS is now set to the offset of gptboot.c
+		push %ax
+		push $MEM_USR/16
 
-# Set segment offset.
-		mov $MEM_USR/16,%ax
-		mov %ax,%es
+
 		mov 0x0, %si
-# Grab data 64k at a time.
-		mov 0xFFFF, %si
-		mov 0xFFFF, %di	#  
-
-
-
-		std
 
 		mov %di,%cx			# Copy 64k - paragraph + 1 
 		inc %cx				#  bytes
 
 
 		rep movsb
-
-# lets pretend this is sane.
-# Bump up the segment offset and copy again.
-		mov %ds, %ax
-		add 0xFFF, %ax
-		mov %ax, %ds
-
-		add $(64 * 1024 - 1),%si
-		mov $(MEM_USR/16 + 0x0FFF),%ax		# Point %es:%di at end of
-		mov $(64 * 1024 - 1),%di	#  largest boot2 range
-
-
-		mov %ax,%es
-
-		std
-
-		mov %di,%cx			# Copy 64k - paragraph + 1 
-		inc %cx				#  bytes
-
-		rep movsb
-
 /*
  * Load btx
  */
@@ -132,12 +104,16 @@ start:		xor %cx,%cx			# Zero
 		mov 0xa(%bx),%cx		# Get BTX length and set
 		mov %bx,%si			#  %si to end of BTX
 		mov $MEM_BTX,%di		# %di -> end of BTX at
+
+# load the same source index and the same destination index relative to %cx
 		add %cx,%si			#  MEM_BTX
 		add %cx,%di
 		dec %si
 		dec %di
 		rep movsb			# Move BTX
 		cld				# String ops inc
+
+	
 /*
  * Enable A20 so we can access memory above 1 meg.
  * Use the zero-valued %cx as a timeout for embedded hardware which do not
@@ -163,4 +139,30 @@ seta20.3:	sti				# Enable interrupts
  */
 		movb %dl,MEM_ARG
 		jmp MEM_JMP			# Start BTX
+
+# This code just bulk moves a full segment, with an offset.
+# This code walks backward. 
+
+seg_copy:
+		pop %ds # Source segment
+		pop %es # Destination segment
+		pop %bx # Segment offset.
+		pop %cx # amount of bytes.
+		pop %dx # direction, 0 for forward, 1 for backward.
+		test $0x1 %dx
+		jnz seg_copy.2
+seg_copy_backwards:
+		mov %bx, %ax
+		
+		std
+
+seg_copy_forward:
+		mov %bx, %si
+		mov %bx, %di
+		cld
+		jmp seg_copy.3
+seg_copy.3:
+		mov %si, %di
+		rep movsb
+		ret
 end:
