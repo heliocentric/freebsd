@@ -71,6 +71,10 @@ start:		xor %cx,%cx			# Zero
  * boot2 is, but we assume it can't be longer than 64k, so we just always
  * copy 64k.
  */
+		mov $0x0, %al
+		testb $0x2, %al
+		jnz new_code
+old_code:
 		mov $end,%bx			# BTX
 		mov 0xa(%bx),%si		# Get BTX length and set
 		add %bx,%si			#  %si to start of boot2
@@ -97,6 +101,16 @@ start:		xor %cx,%cx			# Zero
 		dec %di
 		rep movsb			# Move BTX
 		cld				# String ops inc
+		jmp seta20
+	
+new_code:
+		# Copy 2 32k chunks:
+		movw $0x2, %cs:(VAR_SEGAMOUNT)
+		call seg_copy
+		cld				# String ops inc
+		jmp seta20	
+
+	
 /*
  * Enable A20 so we can access memory above 1 meg.
  * Use the zero-valued %cx as a timeout for embedded hardware which do not
@@ -122,4 +136,45 @@ seta20.3:	sti				# Enable interrupts
  */
 		movb %dl,MEM_ARG
 		jmp MEM_JMP			# Start BTX
+
+
+
+
+	.set VAR_STORAGE,0x4000
+	.set VAR_SEGOFFSET,0x4000 + 0
+	.set VAR_SEGAMOUNT,0x4000 + 2
+	.set VAR_CURRENTSEG,0x4000 + 4
+	.set VAR_DIRECTION,0x4000 + 6
+	.set VAR_SOURCESEGMENT,0x4000 + 8
+	.set VAR_SEGSIZE, 0x8000 
+# 
+# $VAR_SOURCESEGMENT = Source segment, in paragraphs (16 bytes)
+# 
+# $VAR_SEGOFFSET = Segment offset
+# $VAR_SEGAMOUNT = amount of 32k segments.
+# $VAR_CURRENTSEG = current segment we are working on
+# $VAR_DIRECTION = direction, 1 is foreward, 0 is backward
+#
+# backwards:
+# for (VAR_CURRENTSEG = VAR_SEGAMOUNT - 1; VAR_CURRENTSEG--, VAR_CURRENTSEG >= 0 )
+# {
+#	%ds = VAR_SOURCESEGMENT + (0x0800 * VAR_CURRENTSEG)
+#	%es = MEM_USER + (0x0800 * VAR_CURRENTSEG)
+#	%di = (VAR_SEGSIZE - 1)
+#	%si = (VAR_SEGSIZE - 1) + VAR_SEGOFFSET
+#	std # set direction
+#	rep movsb	
+# }
+seg_copy:
+	std
+	jmp seg_copy_loop
+
+seg_copy_loop:
+	mov %ax, %cs:(VAR_SOURCESEGMENT)
+
+seg_block_copy:
+	mov %si, %di
+	rep movsb
+	ret
+
 end:
