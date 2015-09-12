@@ -71,10 +71,41 @@ start:		xor %cx,%cx			# Zero
  * boot2 is, but we assume it can't be longer than 64k, so we just always
  * copy 64k.
  */
-
+		mov $0x0, %dx
+		test $0x1 %dx
+		jnz new_code
+old_code:
+		mov $end,%bx			# BTX
+		mov 0xa(%bx),%si		# Get BTX length and set
+		add %bx,%si			#  %si to start of boot2
+		mov %si,%ax			# Align %ds:%si on a
+		shr $4,%ax			#  paragraph boundary
+		and $0xf,%si			#  with the smallest
+		mov %ax,%ds			#  possible %si
+		add $(64 * 1024 - 16),%si
+		mov $MEM_USR/16,%ax		# Point %es:%di at end of
+		mov $(64 * 1024 - 16),%di	#  largest boot2 range
+		mov %ax,%es
+		std
+		mov %di,%cx			# Copy 64k - paragraph + 1 
+		inc %cx				#  bytes
+		rep movsb
+		mov %cx,%ds			# Reset %ds and %es
+		mov %cx,%es
+		mov 0xa(%bx),%cx		# Get BTX length and set
+		mov %bx,%si			#  %si to end of BTX
+		mov $MEM_BTX,%di		# %di -> end of BTX at
+		add %cx,%si			#  MEM_BTX
+		add %cx,%di
+		dec %si
+		dec %di
+		rep movsb			# Move BTX
+		cld				# String ops inc
+		jmp seta20
+	
+new_code:
 # This codes purpose is to handle the packing of btxld, where the btx kernel may
 # bump up against the btx client and not on a paragraph boundary.
-
 		mov $end,%bx			# BTX
 # This is being pulled out of the btxld header, which is a uint16t (usr.sbin/btxld/btx.h) btx_hdr
 		mov 0xa(%bx),%si		# Get BTX length and set
@@ -112,6 +143,7 @@ start:		xor %cx,%cx			# Zero
 		dec %di
 		rep movsb			# Move BTX
 		cld				# String ops inc
+		jmp seta20	
 
 	
 /*
