@@ -62,6 +62,7 @@
 #include <sys/ttycom.h>
 #include <sys/unistd.h>
 #include <sys/vnode.h>
+#include <geom/geom.h>
 
 static struct vop_vector devfs_vnodeops;
 static struct fileops devfs_ops_f;
@@ -726,6 +727,8 @@ devfs_getattr(struct vop_getattr_args *ap)
 		fix(de->de_ctime);
 		vap->va_ctime = de->de_ctime;
 	} else {
+		struct g_provider *pp;
+
 		dev = vp->v_rdev;
 		fix(dev->si_atime);
 		vap->va_atime = dev->si_atime;
@@ -735,6 +738,13 @@ devfs_getattr(struct vop_getattr_args *ap)
 		vap->va_ctime = dev->si_ctime;
 
 		vap->va_rdev = cdev2priv(dev)->cdp_inode;
+
+		pp = g_dev_getprovider(dev);
+
+		if (pp) {
+			vap->va_size = vap->va_bytes = pp->mediasize;
+			vap->va_blocksize = pp->sectorsize;
+		}
 	}
 	vap->va_gen = 0;
 	vap->va_flags = 0;
